@@ -191,7 +191,7 @@ async def on_message(message):
         arr = []
         collection.insert_one({"_id":str(message.guild.id), "words":arr})
     db = [words for words in collection.find_one({"_id":str(message.guild.id)})['words']]
-    if db[0] != None:
+    if len(db) > 0:
         words = [words.lower() for words in collection.find_one({"_id":str(message.guild.id)})['words']] #check if it is a valid word
     else:
         words = []
