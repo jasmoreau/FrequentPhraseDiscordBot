@@ -27,7 +27,7 @@ def get_collection():
 
 def get_word(message):
     msg = message.content.lower().replace('!add', '').strip()
-    if msg.startswith("!"):
+    if msg.startswith("!") or msg == "":
         return False
     else:
         return message.content.lower().replace('!add', '').strip()
@@ -51,6 +51,10 @@ async def add_word(message): #adds a word if the command is correct and if the s
     else:
         word = get_word(message)
         collection = get_collection()
+        if word in collection.find_one({"_id":str(message.guild.id)})['words']: #makes sure that the word isn't added already, if it is then just returns with added already
+            await message.channel.send("Word is already added!")
+            return False
+
         if server_exists(message):
             try:
                 collection.update_one({"_id":str(message.guild.id)}, {"$push":{"words":word}}) #add the word to words array in database
@@ -80,12 +84,12 @@ async def clear_all(message):
         return False
 
 async def clear_one(message):
-    collection = get_collection()
+    collection = get_collection() #removes one word by request
     word = get_clear_word(message)
     if server_exists(message):
         try:
-            collection.update_many({"server":str(message.guild.id)}, {"$unset": {word:""}})
-            collection.update_one({"_id":str(message.guild.id)}, {"$pull":{"words":word}})
+            collection.update_many({"server":str(message.guild.id)}, {"$unset": {word:""}}) #removes word from users in the server
+            collection.update_one({"_id":str(message.guild.id)}, {"$pull":{"words":word}}) #pulls the word from server array
             return True
         except Exception as e:
             await message.channel.send("Could not remove " + word + " for some reason. Try it again! Error is " + str(e))
@@ -121,23 +125,27 @@ async def post_leaderboard(message):
     if check not in collection.find_one({"_id":str(message.guild.id)})["words"]: #if the word doesn't exist then return
         await message.channel.send("Word is not assigned")
 
-    members = [collection.find_one({"_id":str(message.guild.id)+" "+str(mem.id)})["name"] for mem in mbers] #creates the lists for the members and their numbers
-    lboard = [collection.find_one({"_id":str(message.guild.id)+" "+str(mem.id)})[check] for mem in mbers]
-    dict = {}
-    for num in range(len(members)):
-        dict[members[num]] = lboard[num] #adds together the members and their respective numbers
-
-    final = sorted(dict.items(), key=lambda x:x[1], reverse=True) #sorts the dict by key value
-
-    msg = check.capitalize() + " Leaderboards \n @@@@@@@@@@@@@@@@@@@@@@ \n"
-    counter = 0
     try:
-        for i in final:
-            if counter < 3:
-                msg = msg + str(i[0]) + ": " + str(i[1]) + "\n"
-                counter += 1
-    except Exception:
-        pass
+        members = [collection.find_one({"_id":str(message.guild.id)+" "+str(mem.id)})["name"] for mem in mbers] #creates the lists for the members and their numbers
+        lboard = [collection.find_one({"_id":str(message.guild.id)+" "+str(mem.id)})[check] for mem in mbers]
+        dict = {}
+        for num in range(len(members)):
+            dict[members[num]] = lboard[num] #adds together the members and their respective numbers
+
+        final = sorted(dict.items(), key=lambda x:x[1], reverse=True) #sorts the dict by key value
+
+        msg = check.capitalize() + " Leaderboards \n @@@@@@@@@@@@@@@@@@@@@@ \n"
+        counter = 0
+        try:
+            for i in final:
+                if counter < 3:
+                    msg = msg + str(i[0]) + ": " + str(i[1]) + "\n"
+                    counter += 1
+        except Exception:
+            pass
+    except Exception as e:
+        await message.channel.send("Error: " + str(e))
+        return False
 
     await message.channel.send(msg)
 
@@ -202,7 +210,10 @@ async def on_message(message):
     for word in words:
         for w in message.content.lower().split():
             if word in w:
-                collection.update_one({"_id":str(message.guild.id) + " " + str(message.author.id)}, {"$inc":{word.lower():1}})
+                try:
+                    collection.update_one({"_id":str(message.guild.id) + " " + str(message.author.id)}, {"$inc":{word.lower():1}})
+                except Exception as e:
+                    await message.channel.send("Error: " + str(e))
 
     if message.content.lower().startswith("!lb"):
         await post_leaderboard(message)
